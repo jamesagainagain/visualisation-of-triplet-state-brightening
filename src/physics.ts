@@ -1,101 +1,142 @@
 // Triplet-state brightening via spin-orbit coupling
-// k_T ∝ (⟨S₁|H_SO|T₁⟩ / ΔE_ST)² × k_S
+//
+// First-order perturbation theory:
+//   k_T ∝ (⟨S₁|H_SO|T₁⟩ / ΔE_ST)² × k_S
+//
+// Exact two-state diagonalization:
+//   sin²θ = ½(1 − ΔE/√(ΔE² + 4V²))
+//   k_T = sin²θ × k_S
+//
 // H_SO coupling decays with distance: H_SO(r) = H_SO_0 × e^(-β×r)
 
 export interface LanthanideData {
   name: string;
   symbol: string;
   Z: number;
-  // Intrinsic SOC strength in cm⁻¹ (scales ~Z⁴ for heavy atoms)
   hso0: number;
-  // Characteristic emission color (nm)
   emissionPeak: number;
   color: string;
 }
 
 export const LANTHANIDES: Record<string, LanthanideData> = {
-  Gd: { name: 'Gadolinium', symbol: 'Gd', Z: 64, hso0: 950, emissionPeak: 312, color: '#8b7ec8' },
-  Tb: { name: 'Terbium', symbol: 'Tb', Z: 65, hso0: 1050, emissionPeak: 545, color: '#5a9e6f' },
-  Dy: { name: 'Dysprosium', symbol: 'Dy', Z: 66, hso0: 1170, emissionPeak: 573, color: '#c49a3c' },
-  Eu: { name: 'Europium', symbol: 'Eu', Z: 63, hso0: 870, emissionPeak: 614, color: '#c45c5c' },
-  Er: { name: 'Erbium', symbol: 'Er', Z: 68, hso0: 1400, emissionPeak: 550, color: '#4d9e82' },
-  Yb: { name: 'Ytterbium', symbol: 'Yb', Z: 70, hso0: 1700, emissionPeak: 980, color: '#8a6eb8' },
-  Ir: { name: 'Iridium', symbol: 'Ir', Z: 77, hso0: 3800, emissionPeak: 520, color: '#5b8def' },
-  Pt: { name: 'Platinum', symbol: 'Pt', Z: 78, hso0: 4200, emissionPeak: 490, color: '#5ba0c4' },
+  Gd: { name: 'Gadolinium', symbol: 'Gd', Z: 64, hso0: 950, emissionPeak: 312, color: '#7B6BA8' },
+  Tb: { name: 'Terbium', symbol: 'Tb', Z: 65, hso0: 1050, emissionPeak: 545, color: '#4A8A5C' },
+  Dy: { name: 'Dysprosium', symbol: 'Dy', Z: 66, hso0: 1170, emissionPeak: 573, color: '#B08A2E' },
+  Eu: { name: 'Europium', symbol: 'Eu', Z: 63, hso0: 870, emissionPeak: 614, color: '#B04E4E' },
+  Er: { name: 'Erbium', symbol: 'Er', Z: 68, hso0: 1400, emissionPeak: 550, color: '#3D8E72' },
+  Yb: { name: 'Ytterbium', symbol: 'Yb', Z: 70, hso0: 1700, emissionPeak: 980, color: '#7A5EA8' },
+  Ir: { name: 'Iridium', symbol: 'Ir', Z: 77, hso0: 3800, emissionPeak: 520, color: '#4A72B0' },
+  Pt: { name: 'Platinum', symbol: 'Pt', Z: 78, hso0: 4200, emissionPeak: 490, color: '#4A8DA8' },
 };
 
-// Dexter exchange decay constant (Å⁻¹)
 export const BETA_DEFAULT = 1.0;
-
-// Singlet radiative rate (s⁻¹) — typical fluorescence
 export const K_S_DEFAULT = 1e8;
 
+// Perturbation parameter threshold: above this, first-order is unreliable
+export const PERTURBATION_WARN_THRESHOLD = 0.3;
+export const PERTURBATION_INVALID_THRESHOLD = 1.0;
+
+export type ValidityLevel = 'valid' | 'caution' | 'invalid';
+
 export interface PhysicsParams {
-  hso: number;       // SOC matrix element (cm⁻¹)
-  deltaEST: number;  // Singlet-triplet gap (cm⁻¹)
-  distance: number;  // Donor-acceptor distance (Å)
-  beta: number;      // Dexter decay constant (Å⁻¹)
-  kS: number;        // Singlet radiative rate (s⁻¹)
+  hso: number;
+  deltaEST: number;
+  distance: number;
+  beta: number;
+  kS: number;
 }
 
 export interface PhysicsResult {
-  // Effective SOC after distance decay
   hsoEffective: number;
-  // Mixing coefficient squared
-  mixingCoeff2: number;
-  // Triplet radiative rate (s⁻¹)
-  kT: number;
-  // Enhancement factor (kT/kS)
+
+  // Perturbation parameter: |V| / ΔE_ST
+  perturbParam: number;
+  validity: ValidityLevel;
+
+  // First-order perturbation theory results
+  pt: {
+    mixingCoeff2: number;
+    kT: number;
+    tauT: number;
+    phosYield: number;
+  };
+
+  // Exact two-state diagonalization results
+  exact: {
+    sin2theta: number;
+    kT: number;
+    tauT: number;
+    phosYield: number;
+  };
+
+  // Fractional error: |PT - exact| / exact
+  fractionalError: number;
+
   enhancement: number;
-  // Triplet lifetime (s)
-  tauT: number;
-  // Phosphorescence quantum yield estimate (simplified)
-  phosYield: number;
 }
 
 export function computeTripletRate(params: PhysicsParams): PhysicsResult {
   const { hso, deltaEST, distance, beta, kS } = params;
 
-  // Distance-dependent SOC: H_SO(r) = H_SO_0 × exp(-β×r)
   const hsoEffective = hso * Math.exp(-beta * distance);
-
-  // Mixing coefficient: (H_SO / ΔE_ST)²
-  // Clamp to prevent singularities
   const gap = Math.max(deltaEST, 1);
-  const mixingCoeff2 = (hsoEffective / gap) ** 2;
-
-  // Triplet radiative rate
-  const kT = mixingCoeff2 * kS;
-
-  // Non-radiative rate estimate (simplified) — ~1e5 s⁻¹ typical
   const kNR = 1e5;
 
-  const enhancement = kT / kS;
-  const tauT = 1 / (kT + kNR);
-  const phosYield = kT / (kT + kNR);
+  // Perturbation parameter: |V/ΔE|
+  const perturbParam = hsoEffective / gap;
 
-  return { hsoEffective, mixingCoeff2, kT, enhancement, tauT, phosYield };
+  let validity: ValidityLevel = 'valid';
+  if (perturbParam >= PERTURBATION_INVALID_THRESHOLD) validity = 'invalid';
+  else if (perturbParam >= PERTURBATION_WARN_THRESHOLD) validity = 'caution';
+
+  // First-order perturbation theory: sin²θ ≈ (V/ΔE)²
+  const ptMixing = perturbParam ** 2;
+  const ptKT = ptMixing * kS;
+  const ptTauT = 1 / (ptKT + kNR);
+  const ptPhosYield = ptKT / (ptKT + kNR);
+
+  // Exact two-state diagonalization
+  // H = [[E_S, V], [V, E_T]]
+  // sin²θ = ½(1 − ΔE / √(ΔE² + 4V²))
+  const V = hsoEffective;
+  const discriminant = Math.sqrt(gap ** 2 + 4 * V ** 2);
+  const sin2theta = 0.5 * (1 - gap / discriminant);
+  const exactKT = sin2theta * kS;
+  const exactTauT = 1 / (exactKT + kNR);
+  const exactPhosYield = exactKT / (exactKT + kNR);
+
+  const fractionalError = exactKT > 0
+    ? Math.abs(ptKT - exactKT) / exactKT
+    : 0;
+
+  return {
+    hsoEffective,
+    perturbParam,
+    validity,
+    pt: { mixingCoeff2: ptMixing, kT: ptKT, tauT: ptTauT, phosYield: ptPhosYield },
+    exact: { sin2theta, kT: exactKT, tauT: exactTauT, phosYield: exactPhosYield },
+    fractionalError,
+    enhancement: exactKT / kS,
+  };
 }
 
-// Generate rate vs parameter sweep
 export function sweepParameter(
   baseParams: PhysicsParams,
   paramKey: keyof PhysicsParams,
   min: number,
   max: number,
   steps: number = 200
-): { x: number; y: number }[] {
-  const points: { x: number; y: number }[] = [];
+): { x: number; ptY: number; exactY: number; validity: ValidityLevel }[] {
+  const points: { x: number; ptY: number; exactY: number; validity: ValidityLevel }[] = [];
   for (let i = 0; i <= steps; i++) {
     const x = min + (max - min) * (i / steps);
     const params = { ...baseParams, [paramKey]: x };
     const result = computeTripletRate(params);
-    points.push({ x, y: result.kT });
+    points.push({ x, ptY: result.pt.kT, exactY: result.exact.kT, validity: result.validity });
   }
   return points;
 }
 
-// Emission spectrum (Gaussian lineshape)
 export function emissionSpectrum(
   centerNm: number,
   kT: number,
@@ -103,25 +144,21 @@ export function emissionSpectrum(
   deltaEST: number
 ): { wavelength: number; singlet: number; triplet: number }[] {
   const points: { wavelength: number; singlet: number; triplet: number }[] = [];
-  // Triplet emission is red-shifted by ΔE_ST
-  // Convert cm⁻¹ to nm shift: Δλ ≈ λ²/(1e7) × ΔE
   const tripletShift = (centerNm ** 2 / 1e7) * deltaEST;
   const tripletCenter = centerNm + tripletShift;
 
-  const fwhmS = 30; // nm
-  const fwhmT = 40; // nm — broader vibronic
+  const fwhmS = 30;
+  const fwhmT = 40;
 
   for (let wl = 350; wl <= 800; wl += 1) {
     const singlet = Math.exp(-0.5 * ((wl - centerNm) / (fwhmS / 2.355)) ** 2);
     const tripletRaw = Math.exp(-0.5 * ((wl - tripletCenter) / (fwhmT / 2.355)) ** 2);
-    // Scale triplet by rate ratio
     const triplet = tripletRaw * Math.min(kT / kS, 1);
     points.push({ wavelength: wl, singlet, triplet });
   }
   return points;
 }
 
-// Convert wavelength to visible color (approximate)
 export function wavelengthToColor(nm: number): string {
   let r = 0, g = 0, b = 0;
   if (nm >= 380 && nm < 440) {
@@ -137,7 +174,6 @@ export function wavelengthToColor(nm: number): string {
   } else if (nm >= 645 && nm <= 780) {
     r = 1;
   }
-  // Intensity falloff at edges
   let factor = 1;
   if (nm >= 380 && nm < 420) factor = 0.3 + 0.7 * (nm - 380) / (420 - 380);
   else if (nm > 700 && nm <= 780) factor = 0.3 + 0.7 * (780 - nm) / (780 - 700);

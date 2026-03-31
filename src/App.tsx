@@ -9,6 +9,7 @@ import {
   K_S_DEFAULT,
   type PhysicsParams,
   type LanthanideData,
+  type ValidityLevel,
 } from './physics';
 import './App.css';
 
@@ -49,8 +50,8 @@ function App() {
   );
 
   const spectrum = useMemo(
-    () => emissionSpectrum(lantData.emissionPeak, result.kT, params.kS, deltaEST),
-    [lantData.emissionPeak, result.kT, params.kS, deltaEST]
+    () => emissionSpectrum(lantData.emissionPeak, result.exact.kT, params.kS, deltaEST),
+    [lantData.emissionPeak, result.exact.kT, params.kS, deltaEST]
   );
 
   const handleLanthanide = useCallback((key: string) => {
@@ -60,163 +61,154 @@ function App() {
 
   return (
     <div className="app">
-      {/* Status bar */}
-      <div className="status-bar">
-        <span className="status-item">
-          <span className="status-dot active" />
-          LIVE
-        </span>
-        <span className="status-item">MODEL: 1ST-ORDER PERTURBATION</span>
-        <span className="status-item">
-          SPECIES: {lantData.name.toUpperCase()} ({lantData.symbol}, Z={lantData.Z})
-        </span>
-        <span className="status-item status-right">
-          k_T = <span className="status-value">{result.kT.toExponential(2)}</span> s⁻¹
-        </span>
-      </div>
-
       <header className="header">
-        <div className="header-left">
+        <div className="header-top">
           <h1>Triplet-State Brightening</h1>
-          <p className="header-sub">
-            Spin-orbit coupling perturbation theory
-          </p>
+          <div className="header-eq">
+            k<sub>T</sub> = (⟨S₁|H<sub>SO</sub>|T₁⟩ / ΔE<sub>ST</sub>)² · k<sub>S</sub>
+          </div>
         </div>
-        <div className="header-equation">
-          k<sub>T</sub> &thinsp;=&thinsp; (⟨S₁|H<sub>SO</sub>|T₁⟩ / ΔE<sub>ST</sub>)² &middot; k<sub>S</sub>
-          &emsp;|&emsp;
-          H<sub>SO</sub>(r) = H<sub>SO</sub><sup>0</sup> &middot; e<sup>−βr</sup>
-        </div>
+        <p className="header-desc">
+          Interactive visualisation of spin-orbit mediated singlet-triplet mixing.
+          Compares first-order perturbation theory with exact two-state diagonalization.
+        </p>
       </header>
 
-      <div className="main-grid">
-        {/* LEFT COL: Controls + Results */}
-        <div className="left-col">
-          <section className="inst-panel">
-            <div className="inst-header">
-              <span className="inst-title">Input Parameters</span>
-            </div>
+      {/* Validity banner */}
+      <ValidityBanner result={result} />
 
-            <div className="inst-body">
-              <div className="param-section">
-                <div className="param-section-label">Heavy Atom Selection</div>
-                <div className="lanthanide-grid">
-                  {Object.entries(LANTHANIDES).map(([key, data]) => (
-                    <button
-                      key={key}
-                      className={`ln-btn ${lanthanide === key ? 'selected' : ''}`}
-                      onClick={() => handleLanthanide(key)}
-                    >
-                      <span className="ln-sym">{data.symbol}</span>
-                      <span className="ln-meta">{data.Z}</span>
-                    </button>
-                  ))}
-                </div>
+      <div className="main-grid">
+        {/* LEFT: Controls + Readout */}
+        <div className="col-left">
+          <section className="panel">
+            <div className="panel-header">Input Parameters</div>
+            <div className="panel-body">
+              <div className="section-label">Heavy atom</div>
+              <div className="ln-grid">
+                {Object.entries(LANTHANIDES).map(([key, data]) => (
+                  <button
+                    key={key}
+                    className={`ln-btn ${lanthanide === key ? 'active' : ''}`}
+                    onClick={() => handleLanthanide(key)}
+                  >
+                    <span className="ln-sym">{data.symbol}</span>
+                    <span className="ln-z">{data.Z}</span>
+                  </button>
+                ))}
               </div>
 
-              <SliderControl
-                label="H_SO"
-                desc="spin-orbit coupling"
-                value={hso}
-                min={50}
-                max={6000}
-                step={10}
-                unit="cm⁻¹"
-                onChange={(v) => setHsoManual(v)}
-              />
-
-              <SliderControl
-                label="ΔE_ST"
-                desc="singlet-triplet gap"
-                value={deltaEST}
-                min={100}
-                max={10000}
-                step={50}
-                unit="cm⁻¹"
-                onChange={setDeltaEST}
-              />
-
-              <SliderControl
-                label="r"
-                desc="donor-acceptor distance"
-                value={distance}
-                min={1}
-                max={15}
-                step={0.1}
-                unit="Å"
-                onChange={setDistance}
-              />
+              <Slider label="H_SO" desc="spin-orbit coupling" value={hso}
+                min={50} max={6000} step={10} unit="cm⁻¹"
+                onChange={(v) => setHsoManual(v)} />
+              <Slider label="ΔE_ST" desc="singlet-triplet gap" value={deltaEST}
+                min={100} max={10000} step={50} unit="cm⁻¹"
+                onChange={setDeltaEST} />
+              <Slider label="r" desc="donor-acceptor distance" value={distance}
+                min={1} max={15} step={0.1} unit="Å"
+                onChange={setDistance} />
             </div>
           </section>
 
-          <section className="inst-panel">
-            <div className="inst-header">
-              <span className="inst-title">Computed Output</span>
-              <span className="inst-badge">REAL-TIME</span>
+          <section className="panel">
+            <div className="panel-header">
+              Computed Output
+              <ValidityDot validity={result.validity} />
             </div>
-            <div className="inst-body">
-              <table className="readout-table">
+            <div className="panel-body">
+              <div className="readout-sub">Perturbation parameter</div>
+              <table className="readout">
                 <tbody>
-                  <ReadoutRow label="H_SO(eff)" value={result.hsoEffective.toFixed(1)} unit="cm⁻¹" />
-                  <ReadoutRow label="⟨mix⟩²" value={result.mixingCoeff2.toExponential(2)} />
-                  <ReadoutRow label="k_T" value={result.kT.toExponential(2)} unit="s⁻¹" highlight />
-                  <ReadoutRow label="τ_T" value={formatTime(result.tauT)} highlight />
-                  <ReadoutRow label="Φ_phos" value={(result.phosYield * 100).toFixed(1)} unit="%" highlight />
-                  <ReadoutRow label="k_T/k_S" value={result.enhancement.toExponential(2)} />
+                  <Row label="H_SO(eff)" val={result.hsoEffective.toFixed(1)} unit="cm⁻¹" />
+                  <Row label="|V/ΔE|" val={result.perturbParam.toFixed(3)}
+                    warn={result.validity !== 'valid'} />
+                  <Row label="Error (PT vs exact)" val={`${(result.fractionalError * 100).toFixed(1)}%`}
+                    warn={result.fractionalError > 0.1} />
+                </tbody>
+              </table>
+
+              <div className="readout-sub" style={{ marginTop: 10 }}>
+                Exact (2-state diag.)
+              </div>
+              <table className="readout">
+                <tbody>
+                  <Row label="sin²θ" val={result.exact.sin2theta.toExponential(3)} />
+                  <Row label="k_T" val={result.exact.kT.toExponential(2)} unit="s⁻¹" accent />
+                  <Row label="τ_T" val={fmtTime(result.exact.tauT)} accent />
+                  <Row label="Φ_phos" val={`${(result.exact.phosYield * 100).toFixed(1)}`} unit="%" accent />
+                </tbody>
+              </table>
+
+              <div className="readout-sub" style={{ marginTop: 10 }}>
+                First-order PT
+                {result.validity !== 'valid' && (
+                  <span className="readout-flag">UNRELIABLE</span>
+                )}
+              </div>
+              <table className="readout">
+                <tbody>
+                  <Row label="⟨mix⟩²" val={result.pt.mixingCoeff2.toExponential(3)}
+                    dim={result.validity !== 'valid'} />
+                  <Row label="k_T" val={result.pt.kT.toExponential(2)} unit="s⁻¹"
+                    dim={result.validity !== 'valid'} />
+                  <Row label="τ_T" val={fmtTime(result.pt.tauT)}
+                    dim={result.validity !== 'valid'} />
+                  <Row label="Φ_phos" val={`${(result.pt.phosYield * 100).toFixed(1)}`} unit="%"
+                    dim={result.validity !== 'valid'} />
                 </tbody>
               </table>
             </div>
           </section>
         </div>
 
-        {/* CENTER: Jablonski + Spectrum */}
-        <div className="center-col">
-          <section className="inst-panel jablonski-section">
-            <div className="inst-header">
-              <span className="inst-title">Energy Level Diagram</span>
-              <span className="inst-meta">Jablonski representation</span>
+        {/* CENTER: Diagrams */}
+        <div className="col-center">
+          <section className="panel panel-diagram">
+            <div className="panel-header">
+              Energy Level Diagram
+              <span className="panel-meta">Jablonski representation</span>
             </div>
-            <div className="inst-body">
+            <div className="panel-body">
               <JablonskiDiagram params={params} result={result} lantData={lantData} />
             </div>
           </section>
 
-          <section className="inst-panel">
-            <div className="inst-header">
-              <span className="inst-title">Emission Spectrum</span>
-              <span className="inst-meta">Gaussian lineshape model</span>
+          <section className="panel">
+            <div className="panel-header">
+              Emission Spectrum
+              <span className="panel-meta">Gaussian lineshape</span>
             </div>
-            <div className="inst-body">
+            <div className="panel-body">
               <SpectrumPlot spectrum={spectrum} lantData={lantData} />
             </div>
           </section>
         </div>
 
-        {/* RIGHT: Rate plot */}
-        <div className="right-col">
-          <section className="inst-panel">
-            <div className="inst-header">
-              <span className="inst-title">Parameter Sweep</span>
-            </div>
-            <div className="inst-body">
+        {/* RIGHT: Sweep */}
+        <div className="col-right">
+          <section className="panel">
+            <div className="panel-header">Parameter Sweep</div>
+            <div className="panel-body">
               <div className="sweep-tabs">
                 {(['hso', 'deltaEST', 'distance'] as SweepParam[]).map((p) => (
-                  <button
-                    key={p}
+                  <button key={p}
                     className={`sweep-tab ${sweepParam === p ? 'active' : ''}`}
-                    onClick={() => setSweepParam(p)}
-                  >
+                    onClick={() => setSweepParam(p)}>
                     {SWEEP_LABELS[p]}
                   </button>
                 ))}
               </div>
-              <RatePlot
-                data={sweepData}
-                xLabel={SWEEP_LABELS[sweepParam]}
-                currentX={params[sweepParam]}
-              />
+              <RatePlot data={sweepData} xLabel={SWEEP_LABELS[sweepParam]}
+                currentX={params[sweepParam]} />
+              <div className="sweep-legend">
+                <span className="sweep-leg-item">
+                  <span className="leg-line exact" /> Exact
+                </span>
+                <span className="sweep-leg-item">
+                  <span className="leg-line pt" /> Perturbation
+                </span>
+              </div>
               <div className="sweep-note">
-                Log₁₀ scale &middot; other parameters held fixed
+                Log₁₀ scale · other parameters held constant
               </div>
             </div>
           </section>
@@ -226,208 +218,194 @@ function App() {
   );
 }
 
-/* ────────────────────────────────────────────────────── */
-/*  Sub-components                                       */
-/* ────────────────────────────────────────────────────── */
+/* ── Validity Banner ──────────────────────────────── */
 
-function SliderControl({
-  label, desc, value, min, max, step, unit, onChange,
-}: {
+function ValidityBanner({ result }: { result: ReturnType<typeof computeTripletRate> }) {
+  if (result.validity === 'valid') return null;
+
+  const isCaution = result.validity === 'caution';
+  const ratio = result.perturbParam.toFixed(2);
+  const error = (result.fractionalError * 100).toFixed(0);
+
+  return (
+    <div className={`validity-banner ${result.validity}`}>
+      <span className="validity-icon">{isCaution ? '⚠' : '✕'}</span>
+      <div className="validity-text">
+        <strong>
+          {isCaution
+            ? 'Perturbation theory approximation degrading'
+            : 'Perturbation theory invalid'}
+        </strong>
+        <span className="validity-detail">
+          |⟨S₁|H_SO|T₁⟩| / ΔE_ST = {ratio}
+          {isCaution ? ' ≥ 0.3' : ' ≥ 1.0'}.
+          {' '}First-order result deviates from exact solution by {error}%.
+          {!isCaution && ' Mixing saturates — diagonalize the coupled 2-state Hamiltonian instead.'}
+          {' '}The exact (two-state) values shown below remain correct.
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ValidityDot({ validity }: { validity: ValidityLevel }) {
+  return <span className={`v-dot ${validity}`} />;
+}
+
+/* ── Generic sub-components ───────────────────────── */
+
+function Slider({ label, desc, value, min, max, step, unit, onChange }: {
   label: string; desc: string; value: number; min: number; max: number;
   step: number; unit: string; onChange: (v: number) => void;
 }) {
   const pct = ((value - min) / (max - min)) * 100;
   return (
     <div className="slider-group">
-      <div className="slider-header">
+      <div className="slider-head">
         <span className="slider-label">{label}</span>
         <span className="slider-desc">{desc}</span>
-        <span className="slider-readout">{value}<span className="slider-unit">{unit}</span></span>
+        <span className="slider-val">{value}<span className="slider-unit">{unit}</span></span>
       </div>
-      <div className="slider-track-wrap">
-        <input
-          type="range" min={min} max={max} step={step} value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="slider"
-          style={{ '--pct': `${pct}%` } as React.CSSProperties}
-        />
-        <div className="slider-range">
-          <span>{min}</span>
-          <span>{max}</span>
-        </div>
-      </div>
+      <input type="range" min={min} max={max} step={step} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="slider" style={{ '--pct': `${pct}%` } as React.CSSProperties} />
+      <div className="slider-minmax"><span>{min}</span><span>{max}</span></div>
     </div>
   );
 }
 
-function ReadoutRow({ label, value, unit, highlight }: {
-  label: string; value: string; unit?: string; highlight?: boolean;
+function Row({ label, val, unit, accent, warn, dim }: {
+  label: string; val: string; unit?: string; accent?: boolean; warn?: boolean; dim?: boolean;
 }) {
+  const cls = [accent && 'accent', warn && 'warn', dim && 'dim'].filter(Boolean).join(' ');
   return (
-    <tr className={`readout-row ${highlight ? 'highlight' : ''}`}>
-      <td className="readout-label">{label}</td>
-      <td className="readout-value">
-        {value}
-        {unit && <span className="readout-unit">{unit}</span>}
-      </td>
+    <tr className={`row ${cls}`}>
+      <td className="row-label">{label}</td>
+      <td className="row-val">{val}{unit && <span className="row-unit">{unit}</span>}</td>
     </tr>
   );
 }
 
-function formatTime(seconds: number): string {
-  if (seconds >= 1) return `${seconds.toFixed(2)} s`;
-  if (seconds >= 1e-3) return `${(seconds * 1e3).toFixed(2)} ms`;
-  if (seconds >= 1e-6) return `${(seconds * 1e6).toFixed(2)} μs`;
-  if (seconds >= 1e-9) return `${(seconds * 1e9).toFixed(2)} ns`;
-  return `${(seconds * 1e12).toFixed(2)} ps`;
+function fmtTime(s: number): string {
+  if (s >= 1) return `${s.toFixed(2)} s`;
+  if (s >= 1e-3) return `${(s * 1e3).toFixed(2)} ms`;
+  if (s >= 1e-6) return `${(s * 1e6).toFixed(2)} μs`;
+  if (s >= 1e-9) return `${(s * 1e9).toFixed(2)} ns`;
+  return `${(s * 1e12).toFixed(2)} ps`;
 }
 
-/* ────────────────────────────────────────────────────── */
-/*  Jablonski Diagram                                    */
-/* ────────────────────────────────────────────────────── */
+/* ── Jablonski Diagram ────────────────────────────── */
 
-function JablonskiDiagram({
-  params, result, lantData,
-}: {
+function JablonskiDiagram({ params, result, lantData }: {
   params: PhysicsParams; result: ReturnType<typeof computeTripletRate>; lantData: LanthanideData;
 }) {
   const w = 520, h = 320;
-  const mixing = Math.min(result.mixingCoeff2 * 1e4, 1);
-  const tripletBrightness = Math.min(result.kT / 1e6, 1);
+  const mixing = Math.min(result.exact.sin2theta * 10, 1);
+  const brightness = Math.min(result.exact.kT / 1e6, 1);
 
-  const groundY = h - 35;
+  const gY = h - 35;
   const s1Y = 55;
-  const t1Y = s1Y + (params.deltaEST / 10000) * (groundY - s1Y - 50) + 25;
+  const t1Y = s1Y + (params.deltaEST / 10000) * (gY - s1Y - 50) + 25;
 
-  const sX = w * 0.32;
-  const tX = w * 0.68;
-  const lw = 80;
+  const sX = w * 0.32, tX = w * 0.68, lw = 80;
 
-  const traceColor = '#5b8def';
-  const tripletColor = lantData.color;
-  const dimColor = '#3a4555';
-  const textColor = '#6b7a8d';
-  const iscColor = '#d4a537';
+  const sColor = '#4A72B0';
+  const tColor = lantData.color;
+  const iscColor = '#C47A2A';
+  const dim = '#B0A898';
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="diagram-svg">
+    <svg viewBox={`0 0 ${w} ${h}`} className="svg-diagram">
       <defs>
-        <marker id="ah-s" viewBox="0 0 8 8" refX="4" refY="4"
+        <marker id="as" viewBox="0 0 8 8" refX="4" refY="4"
           markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M 0 0 L 8 4 L 0 8 z" fill={traceColor} />
+          <path d="M 0 0 L 8 4 L 0 8 z" fill={sColor} />
         </marker>
-        <marker id="ah-t" viewBox="0 0 8 8" refX="4" refY="4"
+        <marker id="at" viewBox="0 0 8 8" refX="4" refY="4"
           markerWidth="5" markerHeight="5" orient="auto-start-reverse">
-          <path d="M 0 0 L 8 4 L 0 8 z" fill={tripletColor} />
+          <path d="M 0 0 L 8 4 L 0 8 z" fill={tColor} />
         </marker>
-        <marker id="ah-isc" viewBox="0 0 8 8" refX="4" refY="4"
+        <marker id="ai" viewBox="0 0 8 8" refX="4" refY="4"
           markerWidth="4" markerHeight="4" orient="auto-start-reverse">
           <path d="M 0 0 L 8 4 L 0 8 z" fill={iscColor} />
         </marker>
       </defs>
 
-      {/* Column labels */}
-      <text x={sX} y={18} textAnchor="middle" className="col-label">SINGLET</text>
-      <text x={tX} y={18} textAnchor="middle" className="col-label">TRIPLET</text>
+      {/* Column headings */}
+      <text x={sX} y={18} textAnchor="middle" className="svg-colhead">SINGLET</text>
+      <text x={tX} y={18} textAnchor="middle" className="svg-colhead">TRIPLET</text>
 
-      {/* Ground state S0 */}
-      <line x1={sX - lw/2} y1={groundY} x2={sX + lw/2} y2={groundY}
-        stroke={dimColor} strokeWidth="2" />
-      <line x1={tX - lw/2} y1={groundY} x2={tX + lw/2} y2={groundY}
-        stroke={dimColor} strokeWidth="2" />
-      <text x={(sX + tX) / 2} y={groundY + 16} textAnchor="middle"
-        className="level-text">S₀</text>
+      {/* S0 ground */}
+      <line x1={sX-lw/2} y1={gY} x2={sX+lw/2} y2={gY} stroke={dim} strokeWidth="2" />
+      <line x1={tX-lw/2} y1={gY} x2={tX+lw/2} y2={gY} stroke={dim} strokeWidth="2" />
+      <text x={(sX+tX)/2} y={gY+16} textAnchor="middle" className="svg-level">S₀</text>
 
       {/* S1 */}
-      <line x1={sX - lw/2} y1={s1Y} x2={sX + lw/2} y2={s1Y}
-        stroke={traceColor} strokeWidth="2" />
-      <text x={sX - lw/2 - 8} y={s1Y + 4} textAnchor="end"
-        className="level-text" fill={traceColor}>S₁</text>
+      <line x1={sX-lw/2} y1={s1Y} x2={sX+lw/2} y2={s1Y} stroke={sColor} strokeWidth="2" />
+      <text x={sX-lw/2-8} y={s1Y+4} textAnchor="end" className="svg-level" fill={sColor}>S₁</text>
 
-      {/* T1 — opacity reflects mixing */}
-      <line x1={tX - lw/2} y1={t1Y} x2={tX + lw/2} y2={t1Y}
-        stroke={tripletColor} strokeWidth="2"
-        opacity={0.35 + mixing * 0.65} />
-      <text x={tX + lw/2 + 8} y={t1Y + 4} textAnchor="start"
-        className="level-text" fill={tripletColor}
-        opacity={0.5 + mixing * 0.5}>T₁</text>
+      {/* T1 */}
+      <line x1={tX-lw/2} y1={t1Y} x2={tX+lw/2} y2={t1Y}
+        stroke={tColor} strokeWidth="2" opacity={0.35 + mixing * 0.65} />
+      <text x={tX+lw/2+8} y={t1Y+4} textAnchor="start" className="svg-level"
+        fill={tColor} opacity={0.5 + mixing * 0.5}>T₁</text>
 
-      {/* Absorption: S0 → S1 (solid upward) */}
-      <line x1={sX - 12} y1={groundY - 6} x2={sX - 12} y2={s1Y + 6}
-        stroke={traceColor} strokeWidth="1.5" markerEnd="url(#ah-s)" />
-      <text x={sX - 24} y={(groundY + s1Y) / 2 + 3} textAnchor="end"
-        className="trans-label" fill={traceColor}>abs</text>
+      {/* Absorption */}
+      <line x1={sX-12} y1={gY-6} x2={sX-12} y2={s1Y+6}
+        stroke={sColor} strokeWidth="1.5" markerEnd="url(#as)" />
+      <text x={sX-24} y={(gY+s1Y)/2+3} textAnchor="end"
+        className="svg-trans" fill={sColor}>abs</text>
 
-      {/* Fluorescence: S1 → S0 (dashed downward) */}
-      <line x1={sX + 12} y1={s1Y + 6} x2={sX + 12} y2={groundY - 6}
-        stroke={traceColor} strokeWidth="1.5" markerEnd="url(#ah-s)"
-        strokeDasharray="4 3" opacity="0.7" />
-      <text x={sX + 24} y={(groundY + s1Y) / 2 + 3} textAnchor="start"
-        className="trans-label" fill={traceColor} opacity="0.7">fluor</text>
+      {/* Fluorescence */}
+      <line x1={sX+12} y1={s1Y+6} x2={sX+12} y2={gY-6}
+        stroke={sColor} strokeWidth="1.5" markerEnd="url(#as)"
+        strokeDasharray="4 3" opacity="0.6" />
+      <text x={sX+24} y={(gY+s1Y)/2+3} textAnchor="start"
+        className="svg-trans" fill={sColor} opacity="0.6">fluor</text>
 
-      {/* ISC: S1 → T1 (curved dashed) */}
+      {/* ISC */}
       <path
-        d={`M ${sX + lw/2 + 4} ${s1Y}
-            C ${(sX + tX) / 2} ${s1Y - 15},
-              ${(sX + tX) / 2} ${t1Y + 15},
-              ${tX - lw/2 - 4} ${t1Y}`}
+        d={`M ${sX+lw/2+4} ${s1Y} C ${(sX+tX)/2} ${s1Y-15}, ${(sX+tX)/2} ${t1Y+15}, ${tX-lw/2-4} ${t1Y}`}
         stroke={iscColor} strokeWidth={1 + mixing * 1.5}
-        fill="none" strokeDasharray="3 4"
-        markerEnd="url(#ah-isc)"
-        opacity={0.2 + mixing * 0.7}
-      />
-      <text x={(sX + tX) / 2} y={Math.min(s1Y, t1Y) - 6}
-        textAnchor="middle" className="trans-label" fill={iscColor}
-        opacity={0.3 + mixing * 0.6}>ISC</text>
+        fill="none" strokeDasharray="3 4" markerEnd="url(#ai)"
+        opacity={0.2 + mixing * 0.7} />
+      <text x={(sX+tX)/2} y={Math.min(s1Y,t1Y)-6} textAnchor="middle"
+        className="svg-trans" fill={iscColor} opacity={0.3 + mixing * 0.6}>ISC</text>
 
-      {/* Phosphorescence: T1 → S0 */}
-      <line x1={tX + 12} y1={t1Y + 6} x2={tX + 12} y2={groundY - 6}
-        stroke={tripletColor}
-        strokeWidth={1 + tripletBrightness * 2}
-        markerEnd="url(#ah-t)"
-        opacity={0.15 + tripletBrightness * 0.75}
-        strokeDasharray="5 3" />
-      <text x={tX + 24} y={(groundY + t1Y) / 2 + 3} textAnchor="start"
-        className="trans-label" fill={tripletColor}
-        opacity={0.2 + tripletBrightness * 0.7}>phos</text>
+      {/* Phosphorescence */}
+      <line x1={tX+12} y1={t1Y+6} x2={tX+12} y2={gY-6}
+        stroke={tColor} strokeWidth={1 + brightness * 2} markerEnd="url(#at)"
+        opacity={0.15 + brightness * 0.75} strokeDasharray="5 3" />
+      <text x={tX+24} y={(gY+t1Y)/2+3} textAnchor="start"
+        className="svg-trans" fill={tColor} opacity={0.2 + brightness * 0.7}>phos</text>
 
-      {/* SOC mixing line */}
+      {/* SOC mixing */}
       {mixing > 0.005 && (
         <g opacity={0.15 + mixing * 0.6}>
-          <line x1={sX + lw/2 + 6} y1={s1Y}
-            x2={tX - lw/2 - 6} y2={t1Y}
-            stroke={iscColor} strokeWidth={0.8 + mixing * 1.2}
-            strokeDasharray="2 5" />
-          <text x={(sX + tX) / 2 + 8} y={(s1Y + t1Y) / 2 + 14}
-            textAnchor="middle" className="mixing-label" fill={iscColor}>
-            H_SO
-          </text>
+          <line x1={sX+lw/2+6} y1={s1Y} x2={tX-lw/2-6} y2={t1Y}
+            stroke={iscColor} strokeWidth={0.8 + mixing * 1.2} strokeDasharray="2 5" />
+          <text x={(sX+tX)/2+8} y={(s1Y+t1Y)/2+14} textAnchor="middle"
+            className="svg-mixing" fill={iscColor}>H_SO</text>
         </g>
       )}
 
-      {/* ΔE_ST dimension line */}
-      <line x1={tX + lw/2 + 22} y1={s1Y} x2={tX + lw/2 + 22} y2={t1Y}
-        stroke={dimColor} strokeWidth="0.75" />
-      <line x1={tX + lw/2 + 18} y1={s1Y} x2={tX + lw/2 + 26} y2={s1Y}
-        stroke={dimColor} strokeWidth="0.75" />
-      <line x1={tX + lw/2 + 18} y1={t1Y} x2={tX + lw/2 + 26} y2={t1Y}
-        stroke={dimColor} strokeWidth="0.75" />
-      <text x={tX + lw/2 + 30} y={(s1Y + t1Y) / 2 + 3}
-        className="dim-label" fill={textColor}>ΔE_ST</text>
+      {/* ΔE_ST dimension */}
+      <line x1={tX+lw/2+22} y1={s1Y} x2={tX+lw/2+22} y2={t1Y}
+        stroke={dim} strokeWidth="0.75" />
+      <line x1={tX+lw/2+18} y1={s1Y} x2={tX+lw/2+26} y2={s1Y}
+        stroke={dim} strokeWidth="0.75" />
+      <line x1={tX+lw/2+18} y1={t1Y} x2={tX+lw/2+26} y2={t1Y}
+        stroke={dim} strokeWidth="0.75" />
+      <text x={tX+lw/2+30} y={(s1Y+t1Y)/2+3} className="svg-dim" fill={dim}>ΔE_ST</text>
     </svg>
   );
 }
 
-/* ────────────────────────────────────────────────────── */
-/*  Rate Sweep Plot                                      */
-/* ────────────────────────────────────────────────────── */
+/* ── Rate Sweep Plot ──────────────────────────────── */
 
-function RatePlot({
-  data, xLabel, currentX,
-}: {
-  data: { x: number; y: number }[];
-  xLabel: string;
-  currentX: number;
+function RatePlot({ data, xLabel, currentX }: {
+  data: { x: number; ptY: number; exactY: number; validity: ValidityLevel }[];
+  xLabel: string; currentX: number;
 }) {
   const w = 320, h = 300;
   const pad = { top: 24, right: 16, bottom: 36, left: 52 };
@@ -436,83 +414,91 @@ function RatePlot({
 
   const xMin = data[0]?.x ?? 0;
   const xMax = data[data.length - 1]?.x ?? 1;
-  const yVals = data.map((d) => d.y).filter((v) => v > 0);
-  const yMin = Math.min(...yVals) || 1;
-  const yMax = Math.max(...yVals) || 1e8;
+  const allY = data.flatMap(d => [d.ptY, d.exactY]).filter(v => v > 0);
+  const yMin = Math.min(...allY) || 1;
+  const yMax = Math.max(...allY) || 1e8;
 
   const logMin = Math.log10(Math.max(yMin, 1));
   const logMax = Math.log10(yMax);
 
-  const scaleX = (x: number) => pad.left + ((x - xMin) / (xMax - xMin)) * pw;
-  const scaleY = (y: number) => {
+  const sx = (x: number) => pad.left + ((x - xMin) / (xMax - xMin)) * pw;
+  const sy = (y: number) => {
     const log = Math.log10(Math.max(y, 1));
     return pad.top + ph - ((log - logMin) / (logMax - logMin || 1)) * ph;
   };
 
-  const pathD = data
-    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.x).toFixed(1)} ${scaleY(d.y).toFixed(1)}`)
+  const exactPath = data
+    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${sx(d.x).toFixed(1)} ${sy(d.exactY).toFixed(1)}`)
+    .join(' ');
+  const ptPath = data
+    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${sx(d.x).toFixed(1)} ${sy(d.ptY).toFixed(1)}`)
     .join(' ');
 
-  const cursorPoint = data.reduce((best, d) =>
-    Math.abs(d.x - currentX) < Math.abs(best.x - currentX) ? d : best, data[0]);
-  const cx = scaleX(cursorPoint.x);
-  const cy = scaleY(cursorPoint.y);
+  // Find first caution/invalid point for shading
+  const cautionStart = data.findIndex(d => d.validity === 'caution');
+  const invalidStart = data.findIndex(d => d.validity === 'invalid');
+
+  const cur = data.reduce((b, d) => Math.abs(d.x - currentX) < Math.abs(b.x - currentX) ? d : b, data[0]);
+  const cx = sx(cur.x), cyExact = sy(cur.exactY);
 
   const yTicks: number[] = [];
-  for (let e = Math.floor(logMin); e <= Math.ceil(logMax); e++) {
-    yTicks.push(e);
-  }
-
-  const traceColor = '#5b8def';
+  for (let e = Math.floor(logMin); e <= Math.ceil(logMax); e++) yTicks.push(e);
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="plot-svg">
-      {/* Plot area border */}
+    <svg viewBox={`0 0 ${w} ${h}`} className="svg-plot">
       <rect x={pad.left} y={pad.top} width={pw} height={ph}
-        fill="none" stroke="#1e2a38" strokeWidth="1" />
+        fill="none" stroke="var(--border)" strokeWidth="1" />
 
-      {/* Grid + tick labels */}
-      {yTicks.map((e) => {
-        const y = scaleY(10 ** e);
-        return (
-          <g key={e}>
-            <line x1={pad.left} y1={y} x2={pad.left + pw} y2={y}
-              stroke="#141e2a" strokeWidth="1" />
-            <text x={pad.left - 6} y={y + 3} textAnchor="end"
-              className="plot-tick">10<tspan dy="-4" fontSize="7">{e}</tspan></text>
-          </g>
-        );
-      })}
+      {/* Caution/invalid regions */}
+      {cautionStart >= 0 && (
+        <rect
+          x={sx(data[cautionStart].x)} y={pad.top}
+          width={invalidStart >= 0
+            ? sx(data[invalidStart].x) - sx(data[cautionStart].x)
+            : pad.left + pw - sx(data[cautionStart].x)}
+          height={ph}
+          fill="var(--warn)" opacity="0.06" />
+      )}
+      {invalidStart >= 0 && (
+        <rect
+          x={sx(data[invalidStart].x)} y={pad.top}
+          width={pad.left + pw - sx(data[invalidStart].x)}
+          height={ph}
+          fill="var(--error)" opacity="0.06" />
+      )}
 
-      {/* Trace */}
-      <path d={pathD} fill="none" stroke={traceColor} strokeWidth="1.5" />
+      {yTicks.map(e => (
+        <g key={e}>
+          <line x1={pad.left} y1={sy(10**e)} x2={pad.left+pw} y2={sy(10**e)}
+            stroke="var(--grid)" strokeWidth="1" />
+          <text x={pad.left-6} y={sy(10**e)+3} textAnchor="end" className="svg-tick">
+            10<tspan dy="-4" fontSize="7">{e}</tspan>
+          </text>
+        </g>
+      ))}
 
-      {/* Cursor crosshair */}
-      <line x1={cx} y1={pad.top} x2={cx} y2={pad.top + ph}
-        stroke="#d4a537" strokeWidth="0.75" strokeDasharray="2 3" opacity="0.6" />
-      <line x1={pad.left} y1={cy} x2={pad.left + pw} y2={cy}
-        stroke="#d4a537" strokeWidth="0.75" strokeDasharray="2 3" opacity="0.6" />
-      <circle cx={cx} cy={cy} r="3" fill="none" stroke="#d4a537" strokeWidth="1.5" />
-      <circle cx={cx} cy={cy} r="1" fill="#d4a537" />
+      {/* PT trace (dashed, dimmer) */}
+      <path d={ptPath} fill="none" stroke="var(--text-tertiary)" strokeWidth="1"
+        strokeDasharray="4 3" opacity="0.7" />
 
-      {/* Axes labels */}
-      <text x={pad.left + pw / 2} y={h - 4} textAnchor="middle" className="plot-axis">
-        {xLabel}
-      </text>
-      <text x={8} y={pad.top - 8} className="plot-axis">
-        k_T (s⁻¹)
-      </text>
+      {/* Exact trace */}
+      <path d={exactPath} fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+
+      {/* Cursor */}
+      <line x1={cx} y1={pad.top} x2={cx} y2={pad.top+ph}
+        stroke="var(--text-secondary)" strokeWidth="0.75" strokeDasharray="2 3" opacity="0.5" />
+      <circle cx={cx} cy={cyExact} r="3" fill="none" stroke="var(--accent)" strokeWidth="1.5" />
+      <circle cx={cx} cy={cyExact} r="1" fill="var(--accent)" />
+
+      <text x={pad.left+pw/2} y={h-4} textAnchor="middle" className="svg-axis">{xLabel}</text>
+      <text x={8} y={pad.top-8} className="svg-axis">k_T (s⁻¹)</text>
     </svg>
   );
 }
 
-/* ────────────────────────────────────────────────────── */
-/*  Emission Spectrum                                    */
-/* ────────────────────────────────────────────────────── */
+/* ── Emission Spectrum ────────────────────────────── */
 
-function SpectrumPlot({
-  spectrum, lantData,
-}: {
+function SpectrumPlot({ spectrum, lantData }: {
   spectrum: { wavelength: number; singlet: number; triplet: number }[];
   lantData: LanthanideData;
 }) {
@@ -522,77 +508,55 @@ function SpectrumPlot({
   const ph = h - pad.top - pad.bottom;
 
   const xMin = 350, xMax = 800;
-  const scaleX = (wl: number) => pad.left + ((wl - xMin) / (xMax - xMin)) * pw;
-  const scaleY = (v: number) => pad.top + ph - v * ph;
+  const sx = (wl: number) => pad.left + ((wl - xMin) / (xMax - xMin)) * pw;
+  const sy = (v: number) => pad.top + ph - v * ph;
 
-  const singletPath = spectrum
-    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.wavelength).toFixed(1)} ${scaleY(d.singlet).toFixed(1)}`)
+  const sPath = spectrum
+    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${sx(d.wavelength).toFixed(1)} ${sy(d.singlet).toFixed(1)}`)
+    .join(' ');
+  const tPath = spectrum
+    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${sx(d.wavelength).toFixed(1)} ${sy(d.triplet).toFixed(1)}`)
     .join(' ');
 
-  const tripletPath = spectrum
-    .map((d, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(d.wavelength).toFixed(1)} ${scaleY(d.triplet).toFixed(1)}`)
-    .join(' ');
-
-  const rainbowStops = [];
+  const stops = [];
   for (let nm = 380; nm <= 780; nm += 15) {
     const pct = ((nm - xMin) / (xMax - xMin)) * 100;
-    rainbowStops.push(
-      <stop key={nm} offset={`${pct}%`} stopColor={wavelengthToColor(nm)} stopOpacity="0.45" />
-    );
+    stops.push(<stop key={nm} offset={`${pct}%`} stopColor={wavelengthToColor(nm)} stopOpacity="0.45" />);
   }
 
-  const traceBlue = '#5b8def';
+  const sColor = '#4A72B0';
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="plot-svg">
+    <svg viewBox={`0 0 ${w} ${h}`} className="svg-plot">
       <defs>
-        <linearGradient id="vis-spectrum" x1="0" y1="0" x2="1" y2="0">
-          {rainbowStops}
-        </linearGradient>
+        <linearGradient id="vis" x1="0" y1="0" x2="1" y2="0">{stops}</linearGradient>
       </defs>
 
-      {/* Plot border */}
       <rect x={pad.left} y={pad.top} width={pw} height={ph}
-        fill="none" stroke="#1e2a38" strokeWidth="1" />
+        fill="none" stroke="var(--border)" strokeWidth="1" />
 
-      {/* Singlet trace */}
-      <path d={singletPath} fill="none" stroke={traceBlue} strokeWidth="1.5" opacity="0.8" />
-
-      {/* Triplet fill + trace */}
-      <path d={`${tripletPath} L ${scaleX(800)} ${scaleY(0)} L ${scaleX(350)} ${scaleY(0)} Z`}
-        fill={lantData.color} opacity="0.1" />
-      <path d={tripletPath} fill="none" stroke={lantData.color} strokeWidth="1.5" />
+      <path d={sPath} fill="none" stroke={sColor} strokeWidth="1.5" opacity="0.75" />
+      <path d={`${tPath} L ${sx(800)} ${sy(0)} L ${sx(350)} ${sy(0)} Z`}
+        fill={lantData.color} opacity="0.08" />
+      <path d={tPath} fill="none" stroke={lantData.color} strokeWidth="1.5" />
 
       {/* Legend */}
-      <line x1={pad.left + 8} y1={pad.top + 10} x2={pad.left + 22} y2={pad.top + 10}
-        stroke={traceBlue} strokeWidth="1.5" />
-      <text x={pad.left + 26} y={pad.top + 13} className="legend-text" fill={traceBlue}>
-        S₁→S₀
-      </text>
-
-      <line x1={pad.left + 72} y1={pad.top + 10} x2={pad.left + 86} y2={pad.top + 10}
+      <line x1={pad.left+8} y1={pad.top+10} x2={pad.left+22} y2={pad.top+10}
+        stroke={sColor} strokeWidth="1.5" />
+      <text x={pad.left+26} y={pad.top+13} className="svg-legend" fill={sColor}>S₁→S₀</text>
+      <line x1={pad.left+72} y1={pad.top+10} x2={pad.left+86} y2={pad.top+10}
         stroke={lantData.color} strokeWidth="1.5" />
-      <text x={pad.left + 90} y={pad.top + 13} className="legend-text" fill={lantData.color}>
-        T₁→S₀
-      </text>
+      <text x={pad.left+90} y={pad.top+13} className="svg-legend" fill={lantData.color}>T₁→S₀</text>
 
-      {/* Visible spectrum bar */}
-      <rect x={pad.left} y={pad.top + ph + 3} width={pw} height={5}
-        fill="url(#vis-spectrum)" />
-
-      {/* Wavelength ticks */}
-      {[400, 450, 500, 550, 600, 650, 700, 750].map((nm) => (
+      <rect x={pad.left} y={pad.top+ph+3} width={pw} height={5} fill="url(#vis)" />
+      {[400,450,500,550,600,650,700,750].map(nm => (
         <g key={nm}>
-          <line x1={scaleX(nm)} y1={pad.top + ph} x2={scaleX(nm)} y2={pad.top + ph + 10}
-            stroke="#2a3545" strokeWidth="0.75" />
-          <text x={scaleX(nm)} y={pad.top + ph + 22} textAnchor="middle" className="plot-tick">
-            {nm}
-          </text>
+          <line x1={sx(nm)} y1={pad.top+ph} x2={sx(nm)} y2={pad.top+ph+10}
+            stroke="var(--border)" strokeWidth="0.75" />
+          <text x={sx(nm)} y={pad.top+ph+22} textAnchor="middle" className="svg-tick">{nm}</text>
         </g>
       ))}
-      <text x={pad.left + pw / 2} y={h - 4} textAnchor="middle" className="plot-axis">
-        λ (nm)
-      </text>
+      <text x={pad.left+pw/2} y={h-4} textAnchor="middle" className="svg-axis">λ (nm)</text>
     </svg>
   );
 }
