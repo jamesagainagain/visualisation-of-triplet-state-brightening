@@ -14,14 +14,14 @@ export interface LanthanideData {
 }
 
 export const LANTHANIDES: Record<string, LanthanideData> = {
-  Gd: { name: 'Gadolinium', symbol: 'Gd', Z: 64, hso0: 950, emissionPeak: 312, color: '#b8a9ff' },
-  Tb: { name: 'Terbium', symbol: 'Tb', Z: 65, hso0: 1050, emissionPeak: 545, color: '#4ade80' },
-  Dy: { name: 'Dysprosium', symbol: 'Dy', Z: 66, hso0: 1170, emissionPeak: 573, color: '#fbbf24' },
-  Eu: { name: 'Europium', symbol: 'Eu', Z: 63, hso0: 870, emissionPeak: 614, color: '#f87171' },
-  Er: { name: 'Erbium', symbol: 'Er', Z: 68, hso0: 1400, emissionPeak: 550, color: '#34d399' },
-  Yb: { name: 'Ytterbium', symbol: 'Yb', Z: 70, hso0: 1700, emissionPeak: 980, color: '#c084fc' },
-  Ir: { name: 'Iridium', symbol: 'Ir', Z: 77, hso0: 3800, emissionPeak: 520, color: '#22d3ee' },
-  Pt: { name: 'Platinum', symbol: 'Pt', Z: 78, hso0: 4200, emissionPeak: 490, color: '#67e8f9' },
+  Gd: { name: 'Gadolinium', symbol: 'Gd', Z: 64, hso0: 950, emissionPeak: 312, color: '#8b7ec8' },
+  Tb: { name: 'Terbium', symbol: 'Tb', Z: 65, hso0: 1050, emissionPeak: 545, color: '#5a9e6f' },
+  Dy: { name: 'Dysprosium', symbol: 'Dy', Z: 66, hso0: 1170, emissionPeak: 573, color: '#c49a3c' },
+  Eu: { name: 'Europium', symbol: 'Eu', Z: 63, hso0: 870, emissionPeak: 614, color: '#c45c5c' },
+  Er: { name: 'Erbium', symbol: 'Er', Z: 68, hso0: 1400, emissionPeak: 550, color: '#4d9e82' },
+  Yb: { name: 'Ytterbium', symbol: 'Yb', Z: 70, hso0: 1700, emissionPeak: 980, color: '#8a6eb8' },
+  Ir: { name: 'Iridium', symbol: 'Ir', Z: 77, hso0: 3800, emissionPeak: 520, color: '#5b8def' },
+  Pt: { name: 'Platinum', symbol: 'Pt', Z: 78, hso0: 4200, emissionPeak: 490, color: '#5ba0c4' },
 };
 
 // Dexter exchange decay constant (Å⁻¹)
